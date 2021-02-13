@@ -1,7 +1,7 @@
-use qovery_engine::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
-use test_utilities::aws::{aws_access_key_id, aws_secret_key};
-use test_utilities::utilities::init;
-use tracing::{error, span, Level};
+// use qovery_engine::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
+// use test_utilities::aws::{aws_access_key_id, aws_secret_key};
+// use test_utilities::utilities::init;
+// use tracing::{error, span, Level};
 
 // can't be tested without an AWS access, it can't be enabled inside
 // #[test]

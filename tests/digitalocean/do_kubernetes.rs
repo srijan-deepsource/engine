@@ -4,28 +4,19 @@ use std::fs::File;
 use std::io::Read;
 
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
-use tracing::{error, span, Level};
+use tracing::{span, Level};
 
-use qovery_engine::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
-use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::digitalocean::{digital_ocean_token, get_kube_cluster_name_from_uuid};
-use self::test_utilities::utilities::{engine_run_test, generate_id};
-use qovery_engine::cloud_provider::kubernetes::Kubernetes;
+use self::test_utilities::utilities;
+use self::test_utilities::utilities::engine_run_test;
+use qovery_engine::transaction::TransactionResult;
 
-//#[test]
-//#[ignore]
-fn create_doks_cluster_in_fra_10() {
+fn create_and_destroy_doks_cluster(region: &str, test_name: &str) {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "create_doks_cluster_in_fra_10");
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
-
-        let cluster_id = "my-first-doks-10";
-        let cluster_name = "do-kube-cluster-fra1-10";
-        let region = "fra1";
 
         let context = test_utilities::utilities::context();
 
@@ -47,10 +38,10 @@ fn create_doks_cluster_in_fra_10() {
 
         let kubernetes = DOKS::new(
             context.clone(),
-            cluster_id.clone(),
-            cluster_name.clone(),
+            utilities::generate_cluster_id(region).as_str(),
+            utilities::generate_cluster_id(region).as_str(),
             DO_KUBERNETES_VERSION,
-            region.clone(),
+            region,
             &digitalocean,
             &cloudflare,
             options_result.expect("Oh my satan an error in test... Options options options"),
@@ -60,47 +51,46 @@ fn create_doks_cluster_in_fra_10() {
             Err(err) => panic!("{:?}", err),
             _ => {}
         }
-        tx.commit();
+        let _ = match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
-        // TESTING: Kube cluster UUID is OK ?
-        let res_uuid = get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_name.clone());
-        match res_uuid {
-            Ok(uuid) => assert_eq!(get_kube_cluster_name_from_uuid(uuid.as_str()), cluster_name.clone()),
-            Err(e) => {
-                error!("{:?}", e.message);
-                assert!(false);
-            }
-        }
+        // // TESTING: Kube cluster UUID is OK ?
+        // let res_uuid = get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_name.clone());
+        // match res_uuid {
+        //     Ok(uuid) => assert_eq!(get_kube_cluster_name_from_uuid(uuid.as_str()), cluster_name.clone()),
+        //     Err(e) => {
+        //         error!("{:?}", e.message);
+        //         assert!(false);
+        //     }
+        // }
 
-        //TESTING: Kubeconfig DOWNLOAD
-        //TODO: Fix the kubernetes_config_path fn
-        match kubernetes.config_file_path() {
-            Ok(file) => {
-                let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
-                // testing kubeconfig file
-                let namespace_to_test = generate_id();
-                match kubectl_exec_create_namespace(
-                    file.clone(),
-                    namespace_to_test.clone().as_str(),
-                    None,
-                    do_credentials_envs.clone(),
-                ) {
-                    Ok(_) => {
-                        // Delete created namespace
-                        match kubectl_exec_delete_namespace(
-                            file,
-                            namespace_to_test.as_str(),
-                            do_credentials_envs.clone(),
-                        ) {
-                            Ok(_) => assert!(true),
-                            Err(_) => assert!(false),
-                        }
-                    }
-                    Err(_) => assert!(false),
-                }
-            }
-            Err(_) => assert!(false),
+        match tx.delete_kubernetes(&kubernetes) {
+            Err(err) => panic!("{:?}", err),
+            _ => {}
         }
-        return "create_doks_cluster_in_fra_10".to_string();
+        let _ = match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        return test_name.to_string();
     })
+}
+
+/*
+    TESTS NOTES:
+    It is useful to keep 2 clusters deployment tests to run in // to validate there is no name collision (overlaping)
+*/
+
+#[cfg(feature = "test-do-infra")]
+#[test]
+fn create_and_destroy_doks_cluster_in_fra1() {
+    let region = "fra1";
+    create_and_destroy_doks_cluster(
+        region.clone(),
+        &format!("create_and_destroy_doks_cluster_in_{}", region),
+    );
 }
