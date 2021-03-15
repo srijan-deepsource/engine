@@ -53,18 +53,34 @@ pub trait Service {
     // used to retrieve logs by using Kubernetes labels (selector)
     fn selector(&self) -> String;
     fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
-        debug_logs(self, deployment_target)
+        match deployment_target {
+            // TODO retrieve logs from managed service?
+            DeploymentTarget::ManagedServices(_, _) => vec![],
+
+            DeploymentTarget::SelfHosted(kubernetes, environment) => {
+                match get_stateless_resource_information_for_user(*kubernetes, *environment, self) {
+                    Ok(lines) => lines,
+                    Err(err) => {
+                        error!(
+                            "error while retrieving debug logs from {} {}; error: {:?}",
+                            self.service_type().name(),
+                            self.name_with_id(),
+                            err
+                        );
+                        vec![]
+                    }
+                }
+            }
+        }
     }
+
     fn is_listening(&self, ip: &str) -> bool {
         let private_port = match self.private_port() {
             Some(private_port) => private_port,
             _ => return false,
         };
 
-        match TcpStream::connect(format!("{}:{}", ip, private_port)) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+        TcpStream::connect(format!("{}:{}", ip, private_port)).is_ok()
     }
     fn engine_error_scope(&self) -> EngineErrorScope;
     fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
@@ -143,7 +159,7 @@ pub trait Router: StatelessService + Listen {
         check_domain_for(
             ListenersHelper::new(self.listeners()),
             self.domains(),
-            self.id().into(),
+            self.id(),
             self.context().execution_id(),
         )?;
         Ok(())
@@ -155,7 +171,7 @@ pub trait Database: StatefulService {
         check_domain_for(
             ListenersHelper::new(&listeners),
             domains,
-            self.id().into(),
+            self.id(),
             self.context().execution_id(),
         )?;
         Ok(())
@@ -265,29 +281,6 @@ impl<'a> ServiceType<'a> {
                 DatabaseType::Redis(_) => "Redis database",
             },
             ServiceType::Router => "Router",
-        }
-    }
-}
-
-pub fn debug_logs<T>(service: &T, deployment_target: &DeploymentTarget) -> Vec<String>
-where
-    T: Service + ?Sized,
-{
-    match deployment_target {
-        DeploymentTarget::ManagedServices(_, _) => Vec::new(), // TODO retrieve logs from managed service?
-        DeploymentTarget::SelfHosted(kubernetes, environment) => {
-            match get_stateless_resource_information_for_user(*kubernetes, *environment, service) {
-                Ok(lines) => lines,
-                Err(err) => {
-                    error!(
-                        "error while retrieving debug logs from {} {}; error: {:?}",
-                        service.service_type().name(),
-                        service.name_with_id(),
-                        err
-                    );
-                    Vec::new()
-                }
-            }
         }
     }
 }
@@ -874,7 +867,7 @@ where
             }
 
             let debug_logs = service.debug_logs(deployment_target);
-            let debug_logs_string = if debug_logs.len() > 0 {
+            let debug_logs_string = if !debug_logs.is_empty() {
                 debug_logs.join("\n")
             } else {
                 String::from("<no debug logs>")
@@ -965,7 +958,17 @@ where
     )?;
 
     for pod in pods.items {
-        for container_status in pod.status.container_statuses {
+        for container_condition in pod.status.conditions {
+            if container_condition.status.to_ascii_lowercase() == "false" {
+                result.push(format!(
+                    "Condition not met to start the container: {} -> {}: {}",
+                    container_condition.typee,
+                    container_condition.reason.unwrap_or_default(),
+                    container_condition.message.unwrap_or_default()
+                ))
+            }
+        }
+        for container_status in pod.status.container_statuses.unwrap_or_default() {
             if let Some(last_state) = container_status.last_state {
                 if let Some(terminated) = last_state.terminated {
                     if let Some(message) = terminated.message {
