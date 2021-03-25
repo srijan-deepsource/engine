@@ -29,7 +29,10 @@ terraform {
       source = "hashicorp/aws"
       version    = "~> 3.8.0"
     }
-
+    vault = {
+      source = "hashicorp/vault"
+      version = "~> 2.18.0"
+    }
     digitalocean = {
       source = "digitalocean/digitalocean"
       version = "~> 1.22.1"

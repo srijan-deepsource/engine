@@ -107,6 +107,7 @@ resource "helm_release" "prometheus_operator" {
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
     helm_release.q_storageclass,
+    vault_generic_secret.cluster_access,
   ]
 
 {% if test_cluster %}

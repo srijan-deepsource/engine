@@ -4,7 +4,7 @@ locals {
 // do not run for tests clusters to avoid uncleaned info.
 // do not try to use count into resource, it will fails trying to connect to vault
 {% if not test_cluster %}
-resource "vault_generic_secret" "cluster-access" {
+resource "vault_generic_secret" "cluster_access" {
   path = "official-clusters-access/${var.organization_id}-${var.kubernetes_cluster_id}"
 
   data_json = <<EOT
@@ -22,7 +22,7 @@ resource "vault_generic_secret" "cluster-access" {
 EOT
 
   depends_on = [
-    aws_eks_cluster.eks_cluster,
+    digitalocean_kubernetes_cluster.kubernetes_cluster,
   ]
 }
 {% endif %}
