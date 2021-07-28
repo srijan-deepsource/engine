@@ -1,13 +1,13 @@
 {% if metrics_history_enabled %}
 resource "helm_release" "prometheus_operator" {
   name = "prometheus-operator"
-  chart = "common/charts/prometheus-operator"
+  chart = "common/charts/kube-prometheus-stack"
   namespace = "prometheus"
   create_namespace = true
   atomic = true
   max_history = 50
 
-  values = [file("chart_values/prometheus_operator.yaml")]
+  values = [file("chart_values/kube-prometheus-stack.yaml")]
 
   // avoid fake timestamp on any CRDs updates as takes a long time to be deployed and not needed if not regularly updated
 
