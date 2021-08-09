@@ -36,8 +36,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
     ScalewayCR::new(
         context.clone(),
-        format!("default-ecr-registry-qovery-test-{}", random_id.clone()).as_str(),
-        format!("default-ecr-registry-qovery-test-{}", random_id.clone()).as_str(),
+        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
+        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_REGION,
@@ -101,17 +101,18 @@ pub fn scw_object_storage(context: Context, region: Region) -> ScalewayOS {
 }
 
 pub fn scw_kubernetes_nodes() -> Vec<Node> {
+    // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
     vec![
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
     ]
 }
 

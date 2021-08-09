@@ -37,10 +37,12 @@ fn test_get_registry_namespace() {
 
     // testing it in all regions
     for region in regions_to_test().into_iter() {
+        let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
@@ -48,12 +50,13 @@ fn test_get_registry_namespace() {
 
         let image = Image {
             application_id: "1234".to_string(),
-            name: "an_image_123".to_string(),
+            name: registry_name.to_string(),
             tag: "tag123".to_string(),
             commit_id: "commit_id".to_string(),
-            registry_name: Some(format!("test-{}-{}", Uuid::new_v4(), region.to_string())),
+            registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         container_registry
@@ -93,10 +96,12 @@ fn test_create_registry_namespace() {
 
     // testing it in all regions
     for region in regions_to_test().into_iter() {
+        let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
@@ -104,12 +109,13 @@ fn test_create_registry_namespace() {
 
         let image = Image {
             application_id: "1234".to_string(),
-            name: "an_image_123".to_string(),
+            name: registry_name.to_string(),
             tag: "tag123".to_string(),
             commit_id: "commit_id".to_string(),
-            registry_name: Some(format!("test-{}-{}", Uuid::new_v4(), &region.to_string())),
+            registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         // execute:
@@ -142,10 +148,12 @@ fn test_delete_registry_namespace() {
 
     // testing it in all regions
     for region in regions_to_test().into_iter() {
+        let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
@@ -153,12 +161,13 @@ fn test_delete_registry_namespace() {
 
         let image = Image {
             application_id: "1234".to_string(),
-            name: "an_image_123".to_string(),
+            name: registry_name.to_string(),
             tag: "tag123".to_string(),
             commit_id: "commit_id".to_string(),
-            registry_name: Some(format!("test-{}-{}", Uuid::new_v4(), &region.to_string())),
+            registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         container_registry
@@ -186,10 +195,12 @@ fn test_get_or_create_registry_namespace() {
 
     // testing it in all regions
     for region in regions_to_test().into_iter() {
+        let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
@@ -197,12 +208,13 @@ fn test_get_or_create_registry_namespace() {
 
         let image = Image {
             application_id: "1234".to_string(),
-            name: "an_image_123".to_string(),
+            name: registry_name.to_string(),
             tag: "tag123".to_string(),
             commit_id: "commit_id".to_string(),
-            registry_name: Some(format!("test-{}-{}", Uuid::new_v4(), &region.to_string())),
+            registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         container_registry
