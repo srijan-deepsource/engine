@@ -9,6 +9,8 @@ use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::transaction::TransactionResult;
 
+use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
+
 #[allow(dead_code)]
 fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
     engine_run_test(|| {
@@ -32,12 +34,12 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
             context,
             cluster_id.clone(),
             cluster_id,
-            SCW_KUBERNETES_VERSION.to_string(),
+            DO_KUBERNETES_VERSION.to_string(),
             region,
-            &scw_cluster,
+            &do_cluster,
             &cloudflare,
             nodes,
-            test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
+            test_utilities::digitalocean::do_kubernetes_cluster_options(secrets),
         );
 
         // Deploy
@@ -73,14 +75,14 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         }
 
         // Destroy
-        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
-            panic!("{:?}", err)
-        }
-        match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        // if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+        //     panic!("{:?}", err)
+        // }
+        // match tx.commit() {
+        //     TransactionResult::Ok => assert!(true),
+        //     TransactionResult::Rollback(_) => assert!(false),
+        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        // };
 
         test_name.to_string()
     });
@@ -92,7 +94,7 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
 fn create_and_destroy_doks_cluster_fra1() {
     let region = Region::Frankfurt;
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_kapsule_cluster(region, secrets, false, function_name!());
+    create_and_destroy_doks_cluster(region, secrets, false, function_name!());
 }
 
 // extern crate test_utilities;

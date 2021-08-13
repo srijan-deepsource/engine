@@ -1,9 +1,19 @@
+use std::env;
+
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::digitalocean::application::Region;
+use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
+use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
+    get_do_latest_doks_slug_from_api, get_doks_info_from_name,
+};
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
-use crate::cloud_provider::digitalocean::network::vpc::{VpcInitKind, get_do_name_available_from_api, get_do_random_available_subnet_from_api};
+use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
+use crate::cloud_provider::digitalocean::network::vpc::{
+    get_do_name_available_from_api, get_do_random_available_subnet_from_api, VpcInitKind,
+};
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
@@ -11,7 +21,7 @@ use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -19,10 +29,9 @@ use crate::models::{
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
-use std::env;
-use crate::cloud_provider::digitalocean::application::Region;
 
 pub mod cidr;
+pub mod doks_api;
 pub mod node;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -64,14 +73,14 @@ pub struct DOKS<'a> {
 impl<'a> DOKS<'a> {
     pub fn new(
         context: Context,
-        id: &str,
-        name: &str,
-        version: &str,
+        id: String,
+        name: String,
+        version: String,
         region: Region,
         cloud_provider: &'a DO,
         dns_provider: &'a dyn DnsProvider,
-        options: Options,
         nodes: Vec<Node>,
+        options: Options,
     ) -> Self {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
@@ -129,33 +138,35 @@ impl<'a> DOKS<'a> {
             // VPC subnet is not set, getting a non used subnet
             VpcInitKind::Autodetect => {
                 match get_do_name_available_from_api(&self.cloud_provider.token, self.options.vpc_name.clone()) {
-                    Ok(vpcs) => match vpcs{
+                    Ok(vpcs) => match vpcs {
                         // new vpc: select a random non used subnet
                         None => {
                             match get_do_random_available_subnet_from_api(&self.cloud_provider.token, self.region) {
                                 Ok(x) => x,
-                                Err(e) => return Err(EngineError {
-                                    cause: EngineErrorCause::Internal,
-                                    scope: EngineErrorScope::Engine,
-                                    execution_id: self.context.execution_id().to_string(),
-                                    message: e.message
-                                }),
+                                Err(e) => {
+                                    return Err(EngineError {
+                                        cause: EngineErrorCause::Internal,
+                                        scope: EngineErrorScope::Engine,
+                                        execution_id: self.context.execution_id().to_string(),
+                                        message: e.message,
+                                    })
+                                }
                             }
                         }
                         // existing vpc: assign current subnet in this case
-                        Some(vpc) => vpc.ip_range
+                        Some(vpc) => vpc.ip_range,
+                    },
+                    Err(e) => {
+                        return Err(EngineError {
+                            cause: EngineErrorCause::Internal,
+                            scope: EngineErrorScope::Engine,
+                            execution_id: self.context.execution_id().to_string(),
+                            message: e.message,
+                        })
                     }
-                    Err(e) => return Err(EngineError {
-                        cause: EngineErrorCause::Internal,
-                        scope: EngineErrorScope::Engine,
-                        execution_id: self.context.execution_id().to_string(),
-                        message: e.message
-                    })
                 }
             }
-            VpcInitKind::Manual => {
-                self.options.vpc_cidr_block.clone()
-            }
+            VpcInitKind::Manual => self.options.vpc_cidr_block.clone(),
         };
         context.insert("vpc_cidr_block", vpc_cidr_block.as_str());
 
@@ -189,7 +200,37 @@ impl<'a> DOKS<'a> {
         context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("doks_cluster_id", &self.id());
         context.insert("doks_master_name", &self.name());
-        context.insert("doks_version", &self.version());
+        let doks_version = match self.get_doks_info_from_name_api() {
+            Ok(x) => match x {
+                // new cluster, we check the wished version is supported by DO
+                None => match get_do_latest_doks_slug_from_api(self.cloud_provider.token.as_str(), self.version()) {
+                    Ok(version) => match version {
+                        None => return Err(EngineError {
+                            cause: EngineErrorCause::Internal,
+                            scope: EngineErrorScope::Engine,
+                            execution_id: self.context.execution_id().to_string(),
+                            message: Some(format!("from the DigitalOcean API, no slug version match the required version ({}). This version is not supported anymore or not yet by DigitalOcean.", self.version()))
+                        }),
+                        Some(v) => v,
+                    }
+                    Err(e) => return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: e.message,
+                    })
+                },
+                // use the same deployed version number
+                Some(x) => x.version
+            }
+            Err(e) => return Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Engine,
+                execution_id: self.context.execution_id().to_string(),
+                message: e.message
+            })
+        };
+        context.insert("doks_version", doks_version.as_str());
 
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
@@ -327,7 +368,14 @@ impl<'a> DOKS<'a> {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
             false => "https://acme-v02.api.letsencrypt.org/directory",
         }
-            .to_string()
+        .to_string()
+    }
+
+    // return cluster info from name if exists
+    fn get_doks_info_from_name_api(&self) -> Result<Option<KubernetesCluster>, SimpleError> {
+        let api_url = format!("{}/clusters", DoApiType::Doks.api_url());
+        let json_content = do_get_from_api(self.cloud_provider.token.as_str(), DoApiType::Doks, api_url)?;
+        get_doks_info_from_name(json_content.as_str(), self.name().to_string())
     }
 }
 
